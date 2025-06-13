@@ -61,7 +61,7 @@ func TransformMetricsResponse(query string, resp tempopb.QueryRangeResponse) []*
 	return append(frames, exemplarFrames...)
 }
 
-func TransformInstantMetricsResponse(query *dataquery.TempoQuery, resp tempopb.QueryInstantResponse) []*data.Frame {
+func TransformInstantMetricsResponse(_ *dataquery.TempoQuery, resp tempopb.QueryInstantResponse) []*data.Frame { // jpe - unused param - remove
 	frames := make([]*data.Frame, len(resp.Series))
 
 	for i, series := range resp.Series {

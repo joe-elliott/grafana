@@ -30,6 +30,7 @@ export interface TempoJsonData extends DataSourceJsonData {
 
 export interface TempoQuery extends TempoBase {
   queryType: TempoQueryType;
+  llmQuery?: string;
 }
 
 export interface MyDataSourceOptions extends DataSourceJsonData {}

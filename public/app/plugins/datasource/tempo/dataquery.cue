@@ -57,9 +57,13 @@ composableKinds: DataQuery: {
 					exemplars?: int64
 					// For metric queries, whether to run instant or range queries
 					metricsQueryType?: #MetricsQueryType
+					// For MCP queries, the tool name to call
+					mcpTool?: string
+					// For MCP queries, the parameters to pass to the tool
+					mcpParameters?: {...}
 				} @cuetsy(kind="interface") @grafana(TSVeneer="type")
 
-				#TempoQueryType: "traceql" | "traceqlSearch" | "serviceMap" | "upload" | "nativeSearch" | "traceId" | "clear" @cuetsy(kind="type")
+				#TempoQueryType: "traceql" | "traceqlSearch" | "serviceMap" | "upload" | "nativeSearch" | "traceId" | "clear" | "llm" | "mcp" @cuetsy(kind="type")
 
 				#MetricsQueryType: "range" | "instant" @cuetsy(kind="enum")
 

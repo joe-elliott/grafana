@@ -31,6 +31,14 @@ export interface TempoQuery extends common.DataQuery {
    */
   maxDuration?: string;
   /**
+   * For MCP queries, the parameters to pass to the tool
+   */
+  mcpParameters?: Record<string, unknown>;
+  /**
+   * For MCP queries, the tool name to call
+   */
+  mcpTool?: string;
+  /**
    * For metric queries, whether to run instant or range queries
    */
   metricsQueryType?: MetricsQueryType;
@@ -81,7 +89,7 @@ export const defaultTempoQuery: Partial<TempoQuery> = {
   groupBy: [],
 };
 
-export type TempoQueryType = ('traceql' | 'traceqlSearch' | 'serviceMap' | 'upload' | 'nativeSearch' | 'traceId' | 'clear');
+export type TempoQueryType = ('traceql' | 'traceqlSearch' | 'serviceMap' | 'upload' | 'nativeSearch' | 'traceId' | 'clear' | 'llm' | 'mcp');
 
 export enum MetricsQueryType {
   Instant = 'instant',
