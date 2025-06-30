@@ -137,7 +137,6 @@ const (
 	TempoQueryTypeTraceId       TempoQueryType = "traceId"
 	TempoQueryTypeClear         TempoQueryType = "clear"
 	TempoQueryTypeLlm           TempoQueryType = "llm"
-	TempoQueryTypeMcp           TempoQueryType = "mcp"
 )
 
 // The state of the TraceQL streaming search query

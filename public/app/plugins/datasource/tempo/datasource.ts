@@ -362,6 +362,15 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
       }
     }
 
+    if (targets.llm?.length) {
+      const llmQueryResults = targets.llm[0].llmQueryResults;
+      if (llmQueryResults) {
+        subQueries.push(of(llmQueryResults));
+      } else {
+        subQueries.push(of({ data: [], state: LoadingState.Error })); // jpe - huh?
+      }
+    }
+
     if (targets.traceql?.length) {
       try {
         const appliedQuery = this.applyVariables(targets.traceql[0], options.scopedVars);

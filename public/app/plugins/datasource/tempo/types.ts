@@ -1,4 +1,4 @@
-import { DataSourceJsonData } from '@grafana/data';
+import { DataQueryResponse, DataSourceJsonData } from '@grafana/data';
 import { NodeGraphOptions, TraceToLogsOptions } from '@grafana/o11y-ds-frontend';
 
 import { TempoQuery as TempoBase, TempoQueryType, TraceqlFilter } from './dataquery.gen';
@@ -31,6 +31,7 @@ export interface TempoJsonData extends DataSourceJsonData {
 export interface TempoQuery extends TempoBase {
   queryType: TempoQueryType;
   llmQuery?: string;
+  llmQueryResults?: DataQueryResponse;
 }
 
 export interface MyDataSourceOptions extends DataSourceJsonData {}

@@ -15,11 +15,11 @@ import {
   withTheme2,
 } from '@grafana/ui';
 
-import { LLMQueryEditor } from './LLMQueryEditor';
 import TraceQLSearch from './SearchTraceQLEditor/TraceQLSearch';
 import { ServiceGraphSection } from './ServiceGraphSection';
 import { TempoQueryType } from './dataquery.gen';
 import { TempoDatasource } from './datasource';
+import { NaturalLanguageQueryEditor } from './natural-language/NaturalLanguageQueryEditor';
 import { QueryEditor } from './traceql/QueryEditor';
 import { TempoQuery } from './types';
 import { migrateFromSearchToTraceQLSearch } from './utils';
@@ -77,7 +77,7 @@ class TempoQueryFieldComponent extends PureComponent<Props, State> {
       { value: 'traceqlSearch', label: 'Search' },
       { value: 'traceql', label: 'TraceQL' },
       { value: 'serviceMap', label: 'Service Graph' },
-      { value: 'llm', label: 'LLM' }, // jpe: adding llm as a "query type" may or may not make sense. works for now.
+      { value: 'llm', label: 'Natural Language' }, // jpe: adding natural language as a "query type" may or may not make sense. works for now.
     ];
 
     // Migrate user to new query type if they are using the old search query type
@@ -179,7 +179,7 @@ class TempoQueryFieldComponent extends PureComponent<Props, State> {
           />
         )}
         {query.queryType === 'llm' && (
-          <LLMQueryEditor
+          <NaturalLanguageQueryEditor
             datasource={this.props.datasource}
             query={query}
             onRunQuery={this.props.onRunQuery}

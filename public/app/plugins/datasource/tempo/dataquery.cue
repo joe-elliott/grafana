@@ -63,7 +63,7 @@ composableKinds: DataQuery: {
 					mcpParameters?: {...}
 				} @cuetsy(kind="interface") @grafana(TSVeneer="type")
 
-				#TempoQueryType: "traceql" | "traceqlSearch" | "serviceMap" | "upload" | "nativeSearch" | "traceId" | "clear" | "llm" | "mcp" @cuetsy(kind="type")
+				#TempoQueryType: "traceql" | "traceqlSearch" | "serviceMap" | "upload" | "nativeSearch" | "traceId" | "clear" | "llm" @cuetsy(kind="type")
 
 				#MetricsQueryType: "range" | "instant" @cuetsy(kind="enum")
 

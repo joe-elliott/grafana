@@ -87,7 +87,7 @@ export const defaultTempoQuery: Partial<TempoQuery> = {
   groupBy: [],
 };
 
-export type TempoQueryType = ('traceql' | 'traceqlSearch' | 'serviceMap' | 'upload' | 'nativeSearch' | 'traceId' | 'clear' | 'llm' | 'mcp');
+export type TempoQueryType = ('traceql' | 'traceqlSearch' | 'serviceMap' | 'upload' | 'nativeSearch' | 'traceId' | 'clear' | 'llm');
 
 export enum MetricsQueryType {
   Instant = 'instant',
