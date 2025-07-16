@@ -40,6 +40,14 @@ export const NaturalLanguageQueryEditor: React.FC<NaturalLanguageQueryEditorProp
   const theme = useTheme2();
   const [llmHealth, setLLMHealth] = useState<LLMProviderHealthDetails | null>(null);
 
+  console.log('NaturalLanguageQueryEditor - Props:', {
+    // Debug
+    lastExecutedTraceQL,
+    conversation,
+    finalResponse,
+    query,
+  });
+
   useEffect(() => {
     const checkLLMStatus = async () => {
       try {

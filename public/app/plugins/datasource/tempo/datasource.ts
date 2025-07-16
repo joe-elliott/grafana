@@ -138,6 +138,9 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
   // The version of Tempo running on the backend. `null` if we cannot retrieve it for whatever reason
   tempoVersion?: string | null;
 
+  // Store the latest LLM query update
+  latestLLMQueryUpdate?: TempoQuery;
+
   constructor(
     public instanceSettings: DataSourceInstanceSettings<TempoJsonData>,
     private readonly templateSrv: TemplateSrv = getTemplateSrv()
@@ -828,10 +831,44 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
   ): Observable<DataQueryResponse> {
     return from(this.executeLLMQuery(options, target, query)).pipe(
       map((result) => {
-        return {
-          data: result.data || [],
+        console.log('LLM Query Result - target object:', target); // Debug
+        console.log('LLM Query Result - conversation:', target.llmConversation); // Debug
+        console.log('LLM Query Result - final response:', target.llmFinalResponse); // Debug
+        console.log('LLM Query Result - last executed TraceQL:', target.llmLastExecutedTraceQL); // Debug
+
+        // Create a DataFrame with the updated query object as metadata
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const dataWithMeta = result.data.map((frame: any) => ({
+          ...frame,
+          meta: {
+            ...frame.meta,
+            custom: {
+              ...frame.meta?.custom,
+              updatedQuery: target,
+            },
+          },
+        }));
+
+        const response = {
+          data:
+            dataWithMeta.length > 0
+              ? dataWithMeta
+              : [
+                  {
+                    fields: [],
+                    length: 0,
+                    meta: {
+                      custom: {
+                        updatedQuery: target,
+                      },
+                    },
+                  },
+                ],
           state: LoadingState.Done,
         };
+
+        console.log('LLM Query Response:', response); // Debug
+        return response;
       }),
       catchError((error) => {
         console.error('Error executing LLM query:', error);
@@ -1136,6 +1173,9 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
 
     // Final update
     updateTarget();
+
+    // Store the updated query in the datasource for the UI to access
+    this.latestLLMQueryUpdate = { ...target };
 
     return { data: traceqlResults };
   }

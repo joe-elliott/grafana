@@ -57,6 +57,35 @@ class TempoQueryFieldComponent extends PureComponent<Props, State> {
     }
   }
 
+  componentDidUpdate(prevProps: Props) {
+    console.log('QueryField componentDidUpdate - props.data:', this.props.data); // Debug
+    console.log('QueryField componentDidUpdate - query type:', this.props.query.queryType); // Debug
+
+    // Only check for LLM query updates
+    if (this.props.query.queryType === 'llm' && this.props.data && this.props.data.state === 'Done') {
+      const latestUpdate = this.props.datasource.latestLLMQueryUpdate;
+      console.log('QueryField componentDidUpdate - latestUpdate:', latestUpdate); // Debug
+
+      if (latestUpdate && latestUpdate.refId === this.props.query.refId) {
+        console.log('QueryField componentDidUpdate - updating query with LLM data'); // Debug
+        console.log('QueryField componentDidUpdate - LLM conversation:', latestUpdate.llmConversation); // Debug
+        console.log('QueryField componentDidUpdate - LLM final response:', latestUpdate.llmFinalResponse); // Debug
+        console.log('QueryField componentDidUpdate - LLM last executed TraceQL:', latestUpdate.llmLastExecutedTraceQL); // Debug
+
+        // Update the query object with the LLM data
+        this.props.onChange({
+          ...this.props.query,
+          llmConversation: latestUpdate.llmConversation,
+          llmFinalResponse: latestUpdate.llmFinalResponse,
+          llmLastExecutedTraceQL: latestUpdate.llmLastExecutedTraceQL,
+        });
+
+        // Clear the update to avoid repeated updates
+        this.props.datasource.latestLLMQueryUpdate = undefined;
+      }
+    }
+  }
+
   onClearResults = () => {
     // Run clear query to clear results
     const { onChange, query, onRunQuery } = this.props;
