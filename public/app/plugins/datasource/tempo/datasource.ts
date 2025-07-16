@@ -1039,6 +1039,14 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
   ): Promise<{ data: any[] }> {
     console.log('executeLLMQuery', naturalLanguageQuery); // jpe - remove
 
+    // Clear existing LLM data at the beginning
+    target.llmConversation = [];
+    target.llmFinalResponse = '';
+    target.llmLastExecutedTraceQL = '';
+
+    // Store and update the datasource immediately to clear the UI
+    this.latestLLMQueryUpdate = { ...target };
+
     const conversation: Array<{
       type: 'natural-language-text' | 'tool-call' | 'tool-result';
       content: string;
@@ -1052,11 +1060,14 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let traceqlResults: any[] = [];
 
-    // Helper function to update target
+    // Helper function to update target and notify UI
     const updateTarget = () => {
       target.llmConversation = [...conversation];
       target.llmFinalResponse = finalResponse;
       target.llmLastExecutedTraceQL = lastExecutedTraceQL;
+
+      // Update the datasource with the latest data for real-time UI updates
+      this.latestLLMQueryUpdate = { ...target };
     };
 
     const SYSTEM_PROMPT = `You are tasked with executing a single TraceQL query. The results will be displayed to the user and you should provide no summary of the results.

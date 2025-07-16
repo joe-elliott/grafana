@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 import { CoreApp, QueryEditorProps } from '@grafana/data';
 import { llm } from '@grafana/llm';
-import { InlineField, InlineFieldRow, TextArea, Button, Alert, useTheme2 } from '@grafana/ui';
+import { InlineField, InlineFieldRow, TextArea, Button, Alert, useTheme2, LoadingPlaceholder } from '@grafana/ui';
 
 import { TempoDatasource } from '../datasource';
 import { TempoQuery } from '../types';
@@ -33,6 +33,7 @@ export const NaturalLanguageQueryEditor: React.FC<NaturalLanguageQueryEditorProp
   onChange,
   onRunQuery,
   datasource,
+  data,
   lastExecutedTraceQL = '',
   conversation = [],
   finalResponse = '',
@@ -46,6 +47,7 @@ export const NaturalLanguageQueryEditor: React.FC<NaturalLanguageQueryEditorProp
     conversation,
     finalResponse,
     query,
+    dataState: data?.state,
   });
 
   useEffect(() => {
@@ -109,6 +111,8 @@ export const NaturalLanguageQueryEditor: React.FC<NaturalLanguageQueryEditorProp
     );
   }
 
+  const isLoading = data?.state === 'Loading';
+
   return (
     <>
       <InlineFieldRow>
@@ -122,6 +126,11 @@ export const NaturalLanguageQueryEditor: React.FC<NaturalLanguageQueryEditorProp
           />
         </InlineField>
       </InlineFieldRow>
+      {isLoading && (
+        <div style={{ marginTop: theme.spacing(2) }}>
+          <LoadingPlaceholder text="LLM is processing your query..." />
+        </div>
+      )}
       <InlineFieldRow>
         <InlineField label="TraceQL" labelWidth={14} grow>
           <TextArea

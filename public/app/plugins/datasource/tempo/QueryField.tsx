@@ -30,6 +30,7 @@ interface Props extends QueryEditorProps<TempoDatasource, TempoQuery>, Themeable
 }
 interface State {
   uploadModalOpen: boolean;
+  llmPollingInterval?: number;
 }
 
 // This needs to default to traceql for data sources like Splunk, where clicking on a
@@ -41,6 +42,7 @@ class TempoQueryFieldComponent extends PureComponent<Props, State> {
     super(props);
     this.state = {
       uploadModalOpen: false,
+      llmPollingInterval: undefined,
     };
   }
 
@@ -61,30 +63,61 @@ class TempoQueryFieldComponent extends PureComponent<Props, State> {
     console.log('QueryField componentDidUpdate - props.data:', this.props.data); // Debug
     console.log('QueryField componentDidUpdate - query type:', this.props.query.queryType); // Debug
 
-    // Only check for LLM query updates
-    if (this.props.query.queryType === 'llm' && this.props.data && this.props.data.state === 'Done') {
-      const latestUpdate = this.props.datasource.latestLLMQueryUpdate;
-      console.log('QueryField componentDidUpdate - latestUpdate:', latestUpdate); // Debug
+    // Handle LLM query lifecycle
+    if (this.props.query.queryType === 'llm') {
+      // If query just started, do immediate update to clear previous data
+      if (this.props.data && this.props.data.state === 'Loading' && prevProps.data?.state !== 'Loading') {
+        console.log('QueryField componentDidUpdate - LLM query started, clearing data'); // Debug
+        this.checkForLLMUpdates();
+      }
 
-      if (latestUpdate && latestUpdate.refId === this.props.query.refId) {
-        console.log('QueryField componentDidUpdate - updating query with LLM data'); // Debug
-        console.log('QueryField componentDidUpdate - LLM conversation:', latestUpdate.llmConversation); // Debug
-        console.log('QueryField componentDidUpdate - LLM final response:', latestUpdate.llmFinalResponse); // Debug
-        console.log('QueryField componentDidUpdate - LLM last executed TraceQL:', latestUpdate.llmLastExecutedTraceQL); // Debug
+      // If query is running and we don't have a polling interval, start one
+      if (this.props.data && this.props.data.state === 'Loading' && !this.state.llmPollingInterval) {
+        console.log('QueryField componentDidUpdate - starting LLM polling'); // Debug
+        const intervalId = window.setInterval(() => {
+          this.checkForLLMUpdates();
+        }, 100); // Check every 100ms
 
-        // Update the query object with the LLM data
-        this.props.onChange({
-          ...this.props.query,
-          llmConversation: latestUpdate.llmConversation,
-          llmFinalResponse: latestUpdate.llmFinalResponse,
-          llmLastExecutedTraceQL: latestUpdate.llmLastExecutedTraceQL,
-        });
+        this.setState({ llmPollingInterval: intervalId });
+      }
 
-        // Clear the update to avoid repeated updates
-        this.props.datasource.latestLLMQueryUpdate = undefined;
+      // If query is done, stop polling and do final update
+      if (this.props.data && this.props.data.state === 'Done' && this.state.llmPollingInterval) {
+        console.log('QueryField componentDidUpdate - stopping LLM polling'); // Debug
+        clearInterval(this.state.llmPollingInterval);
+        this.setState({ llmPollingInterval: undefined });
+
+        // Do final update
+        this.checkForLLMUpdates();
       }
     }
   }
+
+  componentWillUnmount() {
+    // Clean up interval if component unmounts
+    if (this.state.llmPollingInterval) {
+      clearInterval(this.state.llmPollingInterval);
+    }
+  }
+
+  checkForLLMUpdates = () => {
+    const latestUpdate = this.props.datasource.latestLLMQueryUpdate;
+
+    if (latestUpdate && latestUpdate.refId === this.props.query.refId) {
+      console.log('QueryField checkForLLMUpdates - updating query with LLM data'); // Debug
+      console.log('QueryField checkForLLMUpdates - LLM conversation:', latestUpdate.llmConversation); // Debug
+      console.log('QueryField checkForLLMUpdates - LLM final response:', latestUpdate.llmFinalResponse); // Debug
+      console.log('QueryField checkForLLMUpdates - LLM last executed TraceQL:', latestUpdate.llmLastExecutedTraceQL); // Debug
+
+      // Update the query object with the LLM data
+      this.props.onChange({
+        ...this.props.query,
+        llmConversation: latestUpdate.llmConversation,
+        llmFinalResponse: latestUpdate.llmFinalResponse,
+        llmLastExecutedTraceQL: latestUpdate.llmLastExecutedTraceQL,
+      });
+    }
+  };
 
   onClearResults = () => {
     // Run clear query to clear results
@@ -214,6 +247,7 @@ class TempoQueryFieldComponent extends PureComponent<Props, State> {
             onRunQuery={this.props.onRunQuery}
             onChange={onChange}
             app={app}
+            data={this.props.data}
             lastExecutedTraceQL={query.llmLastExecutedTraceQL}
             conversation={query.llmConversation}
             finalResponse={query.llmFinalResponse}
