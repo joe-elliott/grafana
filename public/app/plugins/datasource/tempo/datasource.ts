@@ -820,7 +820,7 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
       })
     );
   }
-
+  // jpe - there are 2 termination conditions. 1. traceql returns results 2. llm gives up
   handleLLMQuery(
     options: DataQueryRequest<TempoQuery>,
     target: TempoQuery,
