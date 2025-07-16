@@ -4,8 +4,9 @@ import { useRef, useEffect } from 'react';
 import { GrafanaTheme2 } from '@grafana/data';
 import { CodeEditor, Monaco, monacoTypes, useTheme2 } from '@grafana/ui';
 
-import { TempoQuery } from '../types';
 import { TempoDatasource } from '../datasource';
+import { TempoQuery } from '../types';
+
 import { SimpleNaturalLanguageAutocomplete } from './SimpleNaturalLanguageAutocomplete';
 
 interface Props {
@@ -57,7 +58,7 @@ export function NaturalLanguageEditor(props: Props) {
 
   return (
     <CodeEditor
-      value={query.query || ''}
+      value={query.llmQuery || ''}
       language={langId}
       onBlur={onEditorChange}
       onChange={onEditorChange}

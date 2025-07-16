@@ -185,7 +185,9 @@ class TempoQueryFieldComponent extends PureComponent<Props, State> {
             onRunQuery={this.props.onRunQuery}
             onChange={onChange}
             app={app}
-            onClearResults={this.onClearResults}
+            lastExecutedTraceQL={query.llmLastExecutedTraceQL}
+            conversation={query.llmConversation}
+            finalResponse={query.llmFinalResponse}
           />
         )}
       </>

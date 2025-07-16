@@ -32,6 +32,16 @@ export interface TempoQuery extends TempoBase {
   queryType: TempoQueryType;
   llmQuery?: string;
   llmQueryResults?: DataQueryResponse;
+  llmConversation?: Array<{
+    type: 'natural-language-text' | 'tool-call' | 'tool-result';
+    content: string;
+    toolName?: string;
+    timestamp: number;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    dataFrame?: any;
+  }>;
+  llmFinalResponse?: string;
+  llmLastExecutedTraceQL?: string;
 }
 
 export interface MyDataSourceOptions extends DataSourceJsonData {}

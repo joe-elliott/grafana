@@ -23,6 +23,7 @@ import {
   TestDataSourceResponse,
   urlUtil,
 } from '@grafana/data';
+import { llm } from '@grafana/llm';
 import { NodeGraphOptions, SpanBarOptions, TraceToLogsOptions } from '@grafana/o11y-ds-frontend';
 import {
   BackendSrvRequest,
@@ -363,11 +364,11 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
     }
 
     if (targets.llm?.length) {
-      const llmQueryResults = targets.llm[0].llmQueryResults;
-      if (llmQueryResults) {
-        subQueries.push(of(llmQueryResults));
+      const llmQuery = targets.llm[0].llmQuery;
+      if (llmQuery && llmQuery.trim()) {
+        subQueries.push(this.handleLLMQuery(options, targets.llm[0], llmQuery));
       } else {
-        subQueries.push(of({ data: [], state: LoadingState.Error })); // jpe - huh?
+        subQueries.push(of({ data: [], state: LoadingState.Done }));
       }
     }
 
@@ -815,6 +816,29 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
     );
   }
 
+  handleLLMQuery(
+    options: DataQueryRequest<TempoQuery>,
+    target: TempoQuery,
+    query: string
+  ): Observable<DataQueryResponse> {
+    return from(this.executeLLMQuery(options, target, query)).pipe(
+      map((result) => {
+        return {
+          data: result.data || [],
+          state: LoadingState.Done,
+        };
+      }),
+      catchError((error) => {
+        console.error('Error executing LLM query:', error);
+        return of({
+          data: [],
+          state: LoadingState.Error,
+          error: { message: error instanceof Error ? error.message : 'Unknown error occurred' },
+        });
+      })
+    );
+  }
+
   makeTraceIdRequest(options: DataQueryRequest<TempoQuery>, targets: TempoQuery[]): DataQueryRequest<TempoQuery> {
     const request = {
       ...options,
@@ -938,9 +962,324 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
     if (query.queryType === 'traceql' || query.queryType === 'traceId') {
       return query.query ?? '';
     }
+    if (query.queryType === 'llm') {
+      return query.llmQuery ?? '';
+    }
 
     const appliedQuery = this.applyVariables(query, {});
     return this.languageProvider.generateQueryFromFilters({ traceqlFilters: appliedQuery.filters });
+  }
+
+  // Helper function to safely stringify objects with circular references
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private safeStringify(obj: any, indent = 2): string {
+    const seen = new WeakSet();
+    return JSON.stringify(
+      obj,
+      (key, value) => {
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) {
+            return '[Circular Reference]';
+          }
+          seen.add(value);
+        }
+        return value;
+      },
+      indent
+    );
+  }
+
+  private async executeLLMQuery(
+    options: DataQueryRequest<TempoQuery>,
+    target: TempoQuery,
+    naturalLanguageQuery: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<{ data: any[] }> {
+    console.log('executeLLMQuery', naturalLanguageQuery); // jpe - remove
+
+    const conversation: Array<{
+      type: 'natural-language-text' | 'tool-call' | 'tool-result';
+      content: string;
+      toolName?: string;
+      timestamp: number;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      dataFrame?: any;
+    }> = [];
+    let finalResponse = '';
+    let lastExecutedTraceQL = '';
+
+    // Helper function to update target
+    const updateTarget = () => {
+      target.llmConversation = [...conversation];
+      target.llmFinalResponse = finalResponse;
+      target.llmLastExecutedTraceQL = lastExecutedTraceQL;
+    };
+
+    const SYSTEM_PROMPT = `You are tasked with executing a single TraceQL query. The results will be displayed to the user and you should provide no summary of the results.
+
+- DO NOT summarize the results of the query.
+- Search results are not exhaustive and cannot be used to compplete conclusions about the time range. 
+- Metrics queries are exhaustive and can be used to form complete conclusions about the time range.
+- Be concise and to the point.
+- If you are unsure, ask a question instead of making a guess.
+- Always use the docs tools before attempting to write TraceQL.
+- Use the attribute names and values tools to better understand the trace data if it will help you write a better query.
+- All tool results are displayed to the user. Do not summarize or analyze the results.
+- Execute the simplest query possible that meets the user's needs.
+- If you receive a traceql error feel free to correct the query and try again.
+- In the final response summarize why the query was chosen. Provide no analysis. This should be a few sentences at most.`;
+
+    const tools = await this.buildMCPTools();
+
+    let messages: llm.Message[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: naturalLanguageQuery },
+    ];
+
+    console.log('initial chatCompletions', messages); // jpe - remove
+    let response = await llm.chatCompletions({
+      model: llm.Model.LARGE,
+      messages,
+      tools: tools.length > 0 ? tools : undefined,
+    });
+
+    // Handle tool calls
+    while (response.choices && response.choices[0]?.message?.tool_calls) {
+      const message = response.choices[0].message;
+      messages.push(message);
+
+      // Execute each tool call
+      for (const toolCall of message.tool_calls || []) {
+        // Add tool call to conversation
+        conversation.push({
+          type: 'tool-call',
+          content: `${toolCall.function.name}(${toolCall.function.arguments})`,
+          toolName: toolCall.function.name,
+          timestamp: Date.now(),
+        });
+        updateTarget();
+
+        try {
+          const functionArgs = JSON.parse(toolCall.function.arguments);
+          const toolResult = await this.callMCPTool(toolCall.function.name, functionArgs, options);
+
+          if (toolCall.function.name === 'exec-traceql') {
+            lastExecutedTraceQL = functionArgs.query;
+          }
+
+          // Add tool result to conversation
+          conversation.push({
+            type: 'tool-result',
+            content: this.safeStringify(toolResult?.data || toolResult, 2),
+            toolName: toolCall.function.name,
+            timestamp: Date.now(),
+            dataFrame: toolResult?.frame,
+          });
+          updateTarget();
+
+          messages.push({
+            role: 'tool',
+            content: this.safeStringify(toolResult),
+            tool_call_id: toolCall.id,
+          });
+        } catch (error) {
+          const errorResult = {
+            error: 'Tool call failed',
+            details: error instanceof Error ? error.message : 'Unknown error',
+          };
+
+          // Add error result to conversation
+          conversation.push({
+            type: 'tool-result',
+            content: this.safeStringify(errorResult, 2),
+            toolName: toolCall.function.name,
+            timestamp: Date.now(),
+          });
+          updateTarget();
+
+          messages.push({
+            role: 'tool',
+            content: this.safeStringify(errorResult),
+            tool_call_id: toolCall.id,
+          });
+        }
+      }
+
+      // Get next response from LLM
+      console.log('chatCompletions', messages); // jpe - remove
+      response = await llm.chatCompletions({
+        model: llm.Model.LARGE,
+        messages,
+        tools: tools.length > 0 ? tools : undefined,
+      });
+    }
+
+    if (response.choices && response.choices[0]?.message?.content) {
+      finalResponse = response.choices[0].message.content!;
+      conversation.push({
+        type: 'natural-language-text',
+        content: finalResponse,
+        timestamp: Date.now(),
+      });
+    }
+
+    // Final update
+    updateTarget();
+
+    return { data: [] };
+  }
+
+  private async buildMCPTools(): Promise<llm.Tool[]> {
+    let filteredTools: llm.Tool[] = [];
+
+    try {
+      const response = await getBackendSrv().get(`/api/datasources/${this.instanceSettings.id}/resources/mcp/tools`);
+      if (response && response.tools && Array.isArray(response.tools)) {
+        filteredTools = response.tools
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .filter((tool: any) => tool.name.startsWith('docs-'))
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((tool: any) => ({
+            type: 'function' as const,
+            function: {
+              name: tool.name,
+              description: tool.description || `Call the ${tool.name} tool`,
+              parameters: tool.inputSchema || {
+                type: 'object',
+                properties: {},
+                required: [],
+              },
+            },
+          }));
+      }
+    } catch (error) {
+      console.error('Error loading MCP tools:', error);
+    }
+
+    // Add built-in tools
+    filteredTools.push({
+      type: 'function' as const,
+      function: {
+        name: 'exec-traceql',
+        description: 'Execute a TraceQL query',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'The TraceQL query to execute',
+            },
+          },
+          required: ['query'],
+        },
+      },
+    });
+
+    filteredTools.push({
+      type: 'function' as const,
+      function: {
+        name: 'get-attribute-names',
+        description: 'Get a list of available attribute names that can be used in TraceQL queries',
+        parameters: {
+          type: 'object',
+          properties: {
+            scope: {
+              type: 'string',
+              description:
+                'Optional scope to filter attributes by (span, resource, event, link, instrumentation). If not provided, returns all attributes.',
+            },
+          },
+        },
+      },
+    });
+
+    filteredTools.push({
+      type: 'function' as const,
+      function: {
+        name: 'get-attribute-values',
+        description: 'Get a list of values for a fully scoped attribute name',
+        parameters: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'The attribute name to get values for (e.g. "span.http.method", "resource.service.name")',
+            },
+            filterQuery: { type: 'string', description: 'Filter query to apply to the attribute values' },
+          },
+          required: ['name'],
+        },
+      },
+    });
+
+    return filteredTools;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async callMCPTool(toolName: string, parameters: any, options: DataQueryRequest<TempoQuery>): Promise<any> {
+    if (toolName === 'exec-traceql') {
+      const updatedQuery: TempoQuery = {
+        ...options.targets[0],
+        queryType: 'traceql',
+        query: parameters.query,
+        refId: 'A',
+      };
+
+      const queryRequest: DataQueryRequest<TempoQuery> = {
+        ...options,
+        targets: [updatedQuery],
+      };
+
+      const results = await this.query(queryRequest).toPromise();
+
+      if (results?.error) {
+        throw new Error(results.error.message);
+      }
+
+      return { data: results?.data || [] };
+    }
+
+    if (toolName === 'get-attribute-names') {
+      let tags = await this.getTagKeys();
+
+      if (parameters.scope) {
+        tags = tags.filter((tag) => tag.text.startsWith(parameters.scope + '.'));
+      }
+
+      return { data: tags };
+    }
+
+    if (toolName === 'get-attribute-values') {
+      const tags = await this.tagValuesQuery(parameters.name, parameters.filterQuery);
+      return { data: tags };
+    }
+
+    try {
+      const response = await getBackendSrv().post(`/api/ds/query`, {
+        queries: [
+          {
+            refId: 'A',
+            queryType: 'mcp',
+            mcpTool: toolName,
+            mcpParameters: parameters,
+            datasource: {
+              type: 'tempo',
+              uid: this.uid,
+            },
+          },
+        ],
+      });
+
+      if (response.results && response.results.A && response.results.A.frames && response.results.A.frames.length > 0) {
+        const frame = response.results.A.frames[0];
+        return { data: frame.data, frame: frame };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error calling MCP tool:', error);
+      throw error;
+    }
   }
 }
 

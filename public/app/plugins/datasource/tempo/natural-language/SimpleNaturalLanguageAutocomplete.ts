@@ -1,4 +1,5 @@
 import { Monaco, monacoTypes } from '@grafana/ui';
+
 import { TempoDatasource } from '../datasource';
 
 const SCOPES = ['event', 'instrumentation', 'link', 'resource', 'span', 'trace'];
