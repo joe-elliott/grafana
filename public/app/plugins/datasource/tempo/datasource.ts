@@ -364,10 +364,15 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
     }
 
     if (targets.llm?.length) {
+      // jpe - this is a mess - definitely don't need the llmQueryResults anymore at least
+      const llmQueryResults = targets.llm[0].llmQueryResults;
       const llmQuery = targets.llm[0].llmQuery;
       if (llmQuery && llmQuery.trim()) {
         subQueries.push(this.handleLLMQuery(options, targets.llm[0], llmQuery));
+      } else if (llmQueryResults) {
+        subQueries.push(of(llmQueryResults));
       } else {
+        // jpe - what is this?
         subQueries.push(of({ data: [], state: LoadingState.Done }));
       }
     }
@@ -1007,6 +1012,8 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
     }> = [];
     let finalResponse = '';
     let lastExecutedTraceQL = '';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let traceqlResults: any[] = [];
 
     // Helper function to update target
     const updateTarget = () => {
@@ -1065,6 +1072,10 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
 
           if (toolCall.function.name === 'exec-traceql') {
             lastExecutedTraceQL = functionArgs.query;
+            // Store TraceQL results to return them
+            if (toolResult?.data) {
+              traceqlResults = toolResult.data;
+            }
           }
 
           // Add tool result to conversation
@@ -1126,7 +1137,7 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
     // Final update
     updateTarget();
 
-    return { data: [] };
+    return { data: traceqlResults };
   }
 
   private async buildMCPTools(): Promise<llm.Tool[]> {
@@ -1234,6 +1245,11 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
 
       if (results?.error) {
         throw new Error(results.error.message);
+      }
+
+      // display results in explore
+      if (results?.data) {
+        // needs to be returned all the the way out through query()
       }
 
       return { data: results?.data || [] };
